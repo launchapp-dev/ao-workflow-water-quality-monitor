@@ -1,0 +1,41 @@
+# Current Treatment Plant Operating Parameters
+# Updated by operators — agents read this to understand current treatment state
+
+treatment_plant:
+  coagulation:
+    coagulant: "aluminum sulfate (alum)"
+    dose_mg_l: 15
+    target_jar_test_turbidity_ntu: 0.2
+
+  flocculation:
+    basin_detention_min: 30
+    rpm_stage_1: 60
+    rpm_stage_2: 30
+    rpm_stage_3: 15
+
+  sedimentation:
+    surface_loading_rate_gpd_sqft: 800
+    target_settled_turbidity_ntu: 2
+
+  filtration:
+    filter_type: "dual media (anthracite/sand)"
+    loading_rate_gpm_sqft: 4
+    backwash_interval_hours: 24
+    target_filtered_turbidity_ntu: 0.1
+
+  disinfection:
+    primary: "chlorination"
+    chlorine_dose_mg_l: 2.0
+    contact_time_minutes: 30
+    target_ct_value: 12          # CT = concentration × time (mg/L × min)
+    target_residual_entry_point: 1.0
+
+  ph_adjustment:
+    chemical: "lime (Ca(OH)2)"
+    dose_mg_l: 5
+    target_ph: 7.6
+
+  fluoridation:
+    enabled: true
+    target_mg_l: 0.7
+    chemical: "hydrofluorosilicic acid"

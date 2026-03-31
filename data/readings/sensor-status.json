@@ -1,0 +1,10 @@
+{
+  "sensors": {
+    "TRB-TP-01": {"location": "treatment_plant_effluent", "parameter": "turbidity", "last_read": null, "status": "pending"},
+    "CL2-TP-01": {"location": "treatment_plant_effluent", "parameter": "chlorine_residual", "last_read": null, "status": "pending"},
+    "PH-TP-01": {"location": "treatment_plant_effluent", "parameter": "ph", "last_read": null, "status": "pending"},
+    "TEMP-TP-01": {"location": "treatment_plant_effluent", "parameter": "temperature", "last_read": null, "status": "pending"},
+    "CL2-DIST-01": {"location": "distribution_entry_point", "parameter": "chlorine_residual", "last_read": null, "status": "pending"},
+    "TRB-DIST-01": {"location": "distribution_entry_point", "parameter": "turbidity", "last_read": null, "status": "pending"}
+  }
+}

@@ -1,0 +1,23 @@
+# Water System Identification
+# Replace with your actual utility information
+
+system:
+  name: "Riverside Municipal Water Authority"
+  pwsid: "CA0000001"              # Public Water System ID (assigned by state primacy agency)
+  type: "Community Water System"
+  source: "Surface Water"         # Surface Water | Groundwater | GWUDI
+  population_served: 15000
+  connections: 5200
+  service_area: "Riverside County Zone 3"
+
+contact:
+  operator: "Jane Smith, CWO"
+  phone: "555-234-5678"
+  email: "operations@riversidewater.example"
+  emergency_phone: "555-234-5679"
+  address: "100 Water Treatment Way, Riverside, CA 92501"
+
+regulatory:
+  state_primacy_agency: "California State Water Resources Control Board"
+  state_contact_email: "drinking.water@waterboards.ca.gov"
+  reporting_due_day: 10           # Monthly report due by 10th of following month

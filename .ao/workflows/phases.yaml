@@ -1,0 +1,370 @@
+phases:
+  # ─── ingest-sensor-data phases ──────────────────────────────────────────────
+
+  parse-sensor-files:
+    mode: command
+    command:
+      program: bash
+      args: ["-c", "bash scripts/parse-sensors.sh"]
+      cwd_mode: project_root
+      timeout_secs: 60
+
+  store-readings:
+    mode: agent
+    agent: data-ingestor
+    directive: |
+      New sensor files are ready to be ingested from data/readings/raw/.
+
+      Process all new files in data/readings/raw/:
+      1. Parse each file (CSV or JSON format)
+      2. Validate all fields and data quality
+      3. Flag anomalous readings (sensor errors, out-of-range values, dropouts)
+      4. Normalize units to standard EPA reporting units
+      5. Append valid records to data/readings/current.json
+      6. Log rejected records to data/readings/anomalies.json with rejection reason
+      7. Update data/readings/sensor-status.json with last-read timestamp
+
+      After processing, move all raw files to data/readings/processed/ so they are not re-ingested.
+      Return JSON with ingestion summary: records_ingested, records_rejected, anomalies_flagged, sensors_updated, status
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - records_ingested
+        - records_rejected
+        - status
+
+  # ─── daily-analysis phases ───────────────────────────────────────────────────
+
+  calculate-daily-stats:
+    mode: command
+    command:
+      program: bash
+      args: ["-c", "bash scripts/calculate-daily-stats.sh"]
+      cwd_mode: project_root
+      timeout_secs: 90
+
+  analyze-trends:
+    mode: agent
+    agent: trend-analyst
+    directive: |
+      Analyze today's water quality data for trends and early warning signals.
+
+      1. Read data/readings/current.json — focus on the last 24 hours of readings
+      2. Read data/history/ for the 30-day baseline rolling averages
+      3. Read config/epa-thresholds.yaml for all regulatory limits
+      4. For each monitored parameter, calculate:
+         - Current 24h average and range
+         - 7-day moving average (trend direction)
+         - % of applicable MCL (flag if >80%)
+         - Rate of change (is it accelerating toward the threshold?)
+      5. Use sequential-thinking to analyze any multi-parameter correlations
+         (e.g., turbidity spike + chlorine drop often indicates source water event)
+      6. Identify any parameters approaching warning territory
+
+      Write analysis to data/trend-analysis.json.
+      Return JSON with: parameters_analyzed, trends, warnings, anomalies, overall_status
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - parameters_analyzed
+        - trends
+        - overall_status
+
+  check-compliance:
+    mode: agent
+    agent: compliance-checker
+    directive: |
+      Review today's water quality readings and trend analysis against EPA standards.
+
+      1. Read data/readings/current.json for today's readings
+      2. Read data/trend-analysis.json for trend context
+      3. Read config/epa-thresholds.yaml for all applicable MCLs and action levels
+      4. Read data/violations/active.json to check for any ongoing violations
+
+      For each regulated parameter:
+      - Compare measured values against primary and secondary MCLs
+      - Apply the correct comparison logic (some limits are 90th percentile, some are maximums, some are averages)
+      - Consider the treatment technique requirements (turbidity, chlorine)
+      - Note any secondary MCL exceedances even if non-enforceable
+
+      Issue a compliance verdict:
+      - compliant: all parameters within MCLs, system operating normally
+      - warning: one or more parameters >80% of MCL, or secondary MCL exceeded
+      - violation: primary MCL exceeded, requires regulatory notification within 24h
+      - critical: acute health risk — E. coli detected, nitrate >20 mg/L, or other immediate health hazard
+
+      Write compliance determination to data/compliance-status.json.
+      Return JSON with verdict, violations, warnings, compliance_summary, notification_required, notification_deadline
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    decision_contract:
+      required_fields:
+        - verdict
+        - violations
+        - notification_required
+
+  generate-daily-report:
+    mode: agent
+    agent: regulatory-filer
+    directive: |
+      Generate today's daily compliance summary report.
+
+      Read:
+      - data/readings/current.json (today's readings)
+      - data/trend-analysis.json (trend analysis results)
+      - data/compliance-status.json (compliance determination)
+      - config/system-info.yaml (utility information)
+
+      Write a daily compliance summary to reports/daily/report-$(date +%Y-%m-%d).md.
+      The report should include:
+      1. System header (utility name, PWSID, report date)
+      2. Today's readings table (parameter | value | unit | MCL | status)
+      3. Trend summary (parameters with notable trends)
+      4. Compliance determination and any violations
+      5. Actions taken or required
+      6. Next scheduled monitoring
+
+      If any violations exist, also generate the required violation notice to filings/violation-notice-$(date +%Y-%m-%d).md.
+
+      Return JSON with: status, report_path, filing_path (if violation), next_required_action
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - report_path
+
+  # ─── remediation-workflow phases ─────────────────────────────────────────────
+
+  assess-violation:
+    mode: agent
+    agent: compliance-checker
+    directive: |
+      A compliance violation has been detected. Conduct a formal violation assessment.
+
+      Read:
+      - data/violations/active.json for the current violation record
+      - data/readings/current.json for readings around the time of detection
+      - data/trend-analysis.json for the trend leading up to the violation
+      - data/history/ for historical context on this parameter
+
+      Determine:
+      1. Severity: is this a primary MCL violation? Acute health risk or chronic?
+      2. Duration: when did the parameter first exceed the threshold?
+      3. Scope: which monitoring locations are affected?
+      4. Pattern: is this isolated or part of a broader system failure?
+      5. Notification tier: Tier 1 (24h), Tier 2 (30 days), or Tier 3 (1 year)?
+
+      Update data/violations/active.json with assessment details.
+      Return JSON with verdict (investigate/remediate/report/escalate), severity, scope, notification_tier, assessment_notes
+    decision_contract:
+      required_fields:
+        - verdict
+        - severity
+        - notification_tier
+
+  plan-remediation:
+    mode: agent
+    agent: remediation-planner
+    directive: |
+      Develop a corrective action plan for the active violation.
+
+      Read:
+      - data/violations/active.json for the violation details and assessment
+      - data/trend-analysis.json to understand how the violation developed
+      - data/readings/current.json for current system state
+      - config/treatment-parameters.yaml for current treatment settings
+      - config/epa-thresholds.yaml for the applicable standard
+
+      Use sequential-thinking to:
+      1. Identify the most likely root cause(s) based on the pattern of readings
+      2. Consider equipment issues, source water events, distribution system problems
+      3. Review historical violations for similar patterns
+      4. Prioritize corrective actions by effectiveness and speed of impact
+
+      Write a detailed corrective action plan to data/violations/corrective-action.json.
+      Return JSON with: verdict (investigate/remediate/report/escalate), root_cause_hypothesis,
+      corrective_actions (array), monitoring_plan, estimated_resolution_timeline
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    decision_contract:
+      required_fields:
+        - verdict
+        - root_cause_hypothesis
+        - corrective_actions
+
+  file-violation-notice:
+    mode: agent
+    agent: regulatory-filer
+    directive: |
+      A violation has been confirmed and requires regulatory notification.
+
+      Read:
+      - data/violations/active.json (violation details)
+      - data/violations/corrective-action.json (remediation plan)
+      - config/system-info.yaml (utility name, PWSID, contact info, population served)
+
+      Generate the required regulatory filings:
+      1. Violation notice to state primacy agency (filings/violation-notice-$(date +%Y-%m-%d).md)
+      2. Public notification if required by notification tier:
+         - Tier 1 violations: consumer notification within 24 hours
+         - Tier 2 violations: consumer notification within 30 days
+         - Include required EPA language verbatim
+
+      Update data/violations/active.json to record:
+      - state_notified_at timestamp
+      - public_notified_at timestamp (if applicable)
+      - notification_tier
+      - filing_path
+
+      Return JSON with: status, filing_type, filing_path, notification_tier, deadline_met, next_required_action
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - filing_path
+        - notification_tier
+
+  track-corrective-action:
+    mode: agent
+    agent: remediation-planner
+    directive: |
+      Review the status of the active corrective action plan and determine next steps.
+
+      Read:
+      - data/violations/active.json (violation and remediation history)
+      - data/violations/corrective-action.json (the corrective action plan)
+      - data/readings/current.json (latest readings — are they improving?)
+      - data/trend-analysis.json (trend since remediation began)
+
+      Evaluate progress:
+      1. Are readings trending back toward compliance?
+      2. Have the prescribed corrective actions been implemented?
+      3. Is the resolution timeline on track?
+      4. Do any actions need to be escalated or adjusted?
+
+      Issue a tracking verdict:
+      - resolved: parameter is back within MCL, violation can be closed
+      - ongoing: corrective actions in progress, monitoring confirms improvement
+      - escalate: no improvement after expected timeframe, or condition worsening
+
+      Update data/violations/active.json with current status and progress notes.
+      Return JSON with verdict, current_parameter_value, trend_since_remediation, remaining_actions, notes
+    decision_contract:
+      required_fields:
+        - verdict
+        - current_parameter_value
+        - trend_since_remediation
+
+  close-violation:
+    mode: agent
+    agent: regulatory-filer
+    directive: |
+      The corrective action plan has resolved the violation. Generate the closure documentation.
+
+      Read:
+      - data/violations/active.json (full violation history)
+      - data/violations/corrective-action.json (what was done)
+      - data/readings/current.json (confirmation readings showing compliance restored)
+      - config/system-info.yaml
+
+      Generate:
+      1. Violation closure notice to state primacy agency (filings/violation-closure-$(date +%Y-%m-%d).md)
+         - Reference the original violation notice
+         - Document corrective actions taken with dates
+         - Provide confirmation readings showing return to compliance
+      2. Update data/violations/active.json to move to data/violations/resolved/violation-<date>.json
+
+      Return JSON with: status, closure_filing_path, violation_id, days_to_resolve
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - closure_filing_path
+
+  # ─── monthly-regulatory-report phases ───────────────────────────────────────
+
+  aggregate-monthly-data:
+    mode: command
+    command:
+      program: bash
+      args: ["-c", "bash scripts/aggregate-monthly.sh"]
+      cwd_mode: project_root
+      timeout_secs: 120
+
+  compile-compliance-summary:
+    mode: agent
+    agent: compliance-checker
+    directive: |
+      Compile the monthly compliance summary for all regulated parameters.
+
+      Read:
+      - data/history/ for all daily readings from this month
+      - data/violations/ for any violations this month (active and resolved)
+      - config/epa-thresholds.yaml for all applicable MCLs
+      - config/monitoring-schedule.yaml for required monitoring frequency
+
+      For each regulated parameter:
+      1. Count total samples taken vs required (monitoring compliance)
+      2. Calculate the range (min, max, average) for the month
+      3. Identify the 90th percentile for lead and copper (required for action level comparisons)
+      4. Note any MCL exceedances and their duration
+      5. Calculate total coliform rate (% of samples positive)
+      6. Assess treatment technique compliance (turbidity, chlorine residual)
+
+      Write monthly summary to data/monthly-summary.json.
+      Return JSON with: month, parameters_monitored, monitoring_compliance (%), violations_this_month,
+      parameters_summary (object per parameter), overall_compliance_status
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - month
+        - parameters_monitored
+        - violations_this_month
+        - overall_compliance_status
+
+  generate-regulatory-filing:
+    mode: agent
+    agent: regulatory-filer
+    directive: |
+      Generate the monthly compliance report required for state regulatory submission.
+
+      Read:
+      - data/monthly-summary.json (compiled compliance summary)
+      - data/violations/ (all violations and resolutions this month)
+      - config/system-info.yaml (utility information and reporting contacts)
+      - config/monitoring-schedule.yaml (required monitoring schedule)
+
+      Generate the monthly compliance report to filings/monthly-compliance-$(date +%Y-%m).md.
+      The report must include all elements required by the state primacy agency:
+      1. System identification (utility name, PWSID, reporting period)
+      2. Monitoring results table (all parameters tested, sample counts, results vs MCLs)
+      3. Violations summary (any MCL exceedances, duration, corrective actions)
+      4. Treatment technique compliance (turbidity, disinfection)
+      5. Monitoring schedule compliance (were all required samples collected?)
+      6. Corrective actions status (ongoing, resolved)
+      7. Next month monitoring plan
+      8. Certification statement (utility official must sign)
+
+      Return JSON with: status, filing_path, reporting_period, violations_reported, certification_required
+    capabilities:
+      mutates_state: true
+      writes_files: true
+    output_contract:
+      required_fields:
+        - status
+        - filing_path
+        - reporting_period

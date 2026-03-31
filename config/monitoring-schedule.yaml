@@ -1,0 +1,39 @@
+# Required Monitoring Schedule
+# Based on system size (15,000 population, surface water source)
+
+continuous_monitoring:
+  # Sensors at treatment plant and key distribution points
+  parameters:
+    - turbidity
+    - chlorine_residual
+    - ph
+    - temperature
+  frequency: "continuous (15-min readings)"
+  locations:
+    - treatment_plant_effluent
+    - distribution_entry_point
+    - pressure_zone_1_midpoint
+    - pressure_zone_2_midpoint
+    - storage_tank_outlet
+
+routine_sampling:
+  total_coliform:
+    frequency: "monthly"
+    samples_required: 25     # Based on population served (>10,000 requires 25/month)
+    distribution_required: true
+
+  lead_copper:
+    frequency: "triennial"   # Every 3 years if no action level exceedance
+    samples_required: 50     # Tier 1 sample sites (first-draw from homes with lead service lines)
+
+  nitrate:
+    frequency: "annual"
+    samples_required: 1
+
+  e_coli:
+    frequency: "triggered"   # Only when total coliform positive
+    samples_required: "all affected sites"
+
+lab_analysis:
+  turnaround_sla_hours: 24   # Lab must return results within 24h for routine
+  emergency_turnaround_hours: 4  # For suspected acute violations

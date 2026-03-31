@@ -1,0 +1,15 @@
+schedules:
+  - id: ingest-sensor-data
+    cron: "0 * * * *"
+    workflow_ref: ingest-sensor-data
+    enabled: true
+
+  - id: daily-analysis
+    cron: "30 6 * * *"
+    workflow_ref: daily-analysis
+    enabled: true
+
+  - id: monthly-regulatory-report
+    cron: "0 9 1 * *"
+    workflow_ref: monthly-regulatory-report
+    enabled: true

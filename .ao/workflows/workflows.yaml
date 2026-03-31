@@ -1,0 +1,92 @@
+default_workflow_ref: daily-analysis
+
+workflows:
+  - id: ingest-sensor-data
+    name: "Sensor Data Ingestion"
+    description: "Hourly ingestion of sensor readings and lab results — parse raw files, validate data quality, flag anomalies, store structured records."
+    phases:
+      - parse-sensor-files
+      - store-readings
+
+  - id: daily-analysis
+    name: "Daily Water Quality Analysis"
+    description: "Daily trend analysis, compliance checking, and report generation. Routes to remediation workflow on violation detection."
+    phases:
+      - calculate-daily-stats
+      - analyze-trends
+      - check-compliance:
+          on_verdict:
+            compliant:
+              target: generate-daily-report
+            warning:
+              target: generate-daily-report
+            violation:
+              target: generate-daily-report
+            critical:
+              target: generate-daily-report
+      - generate-daily-report
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true
+
+  - id: remediation-workflow
+    name: "Violation Remediation"
+    description: "Assess the violation, plan corrective actions, file regulatory notices, track resolution, and close the violation when compliance is restored."
+    phases:
+      - assess-violation:
+          on_verdict:
+            investigate:
+              target: plan-remediation
+            remediate:
+              target: plan-remediation
+            report:
+              target: file-violation-notice
+            escalate:
+              target: file-violation-notice
+      - plan-remediation:
+          on_verdict:
+            investigate:
+              target: track-corrective-action
+            remediate:
+              target: file-violation-notice
+            report:
+              target: file-violation-notice
+            escalate:
+              target: file-violation-notice
+      - file-violation-notice
+      - track-corrective-action:
+          on_verdict:
+            resolved:
+              target: close-violation
+            ongoing:
+              target: track-corrective-action
+            escalate:
+              target: file-violation-notice
+          max_rework_attempts: 14
+      - close-violation
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true
+
+  - id: monthly-regulatory-report
+    name: "Monthly Regulatory Filing"
+    description: "Aggregate monthly monitoring data, compile compliance summary across all parameters, and generate the required monthly compliance report for state submission."
+    phases:
+      - aggregate-monthly-data
+      - compile-compliance-summary
+      - generate-regulatory-filing
+    post_success:
+      merge:
+        strategy: squash
+        target_branch: main
+        create_pr: true
+        auto_merge: true
+        cleanup_worktree: true

@@ -1,0 +1,101 @@
+# EPA Maximum Contaminant Levels (MCLs) and Action Levels
+# Source: US EPA National Primary and Secondary Drinking Water Regulations
+# Last updated: 2024
+
+primary_mcls:
+  # Inorganic contaminants
+  nitrate:
+    limit: 10
+    unit: "mg/L as N"
+    type: "maximum"
+    health_basis: "methemoglobinemia (blue baby syndrome)"
+    notification_tier: 2
+
+  nitrite:
+    limit: 1
+    unit: "mg/L as N"
+    type: "maximum"
+    health_basis: "methemoglobinemia"
+    notification_tier: 1
+
+  # Microbial
+  total_coliform:
+    limit: 5
+    unit: "% of monthly samples positive"
+    type: "monthly_percentage"
+    health_basis: "indicator of potential pathogen contamination"
+    notification_tier: 3
+
+  e_coli:
+    limit: 0
+    unit: "presence per 100mL"
+    type: "presence_absence"
+    health_basis: "fecal contamination — acute health risk"
+    notification_tier: 1
+
+  # Turbidity (Surface Water Treatment Rule)
+  turbidity_max:
+    limit: 1
+    unit: "NTU"
+    type: "maximum_filtered"
+    health_basis: "treatment technique — pathogen removal indicator"
+    notification_tier: 2
+
+  turbidity_exceedance_rate:
+    limit: 5
+    unit: "% of daily samples > 0.3 NTU"
+    type: "daily_exceedance_rate"
+    health_basis: "treatment technique"
+    notification_tier: 2
+
+action_levels:
+  # Lead and Copper Rule — 90th percentile of samples
+  lead:
+    action_level: 15
+    unit: "μg/L"
+    comparison: "90th percentile"
+    health_basis: "neurotoxin — especially harmful to children"
+    notification_tier: 2
+
+  copper:
+    action_level: 1300
+    unit: "μg/L"
+    comparison: "90th percentile"
+    health_basis: "gastrointestinal distress, liver damage"
+    notification_tier: 2
+
+treatment_technique:
+  chlorine_residual:
+    minimum: 0.2
+    maximum: 4.0
+    unit: "mg/L"
+    note: "Minimum at all points in distribution system"
+
+  ph_corrosion_control:
+    target_min: 7.0
+    target_max: 8.5
+    unit: "pH units"
+    note: "For lead/copper corrosion control — not an MCL"
+
+secondary_mcls:
+  ph:
+    range_min: 6.5
+    range_max: 8.5
+    unit: "pH units"
+    note: "Aesthetic — corrosive water or scaling"
+
+  total_dissolved_solids:
+    limit: 500
+    unit: "mg/L"
+    note: "Aesthetic — taste and odor"
+
+  color:
+    limit: 15
+    unit: "color units"
+    note: "Aesthetic"
+
+warning_thresholds:
+  # Internal warning at 80% of MCL
+  nitrate_warning: 8.0        # 80% of 10 mg/L
+  turbidity_warning: 0.8      # 80% of 1 NTU
+  chlorine_min_warning: 0.3   # Buffer above 0.2 minimum
